@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"golang.org/x/net/html/charset"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -177,17 +178,44 @@ func (r *preambleReader) Read(p []byte) (int, error) {
 	return n, io.EOF
 }
 
+/**
+ * Create a charset reader based on content type and return
+ * either a wrap reader or the base reader
+ */
+func create_charset_reader(headers Header, baseReader io.Reader) io.Reader {
+
+	// check to see if the content-type headers have != charset=utf-8
+	var encReader io.Reader
+	_, ct_headers, err := headers.ContentType()
+	if err != nil {
+		return baseReader
+	}
+
+	// check if charset is found and isn't utf-8
+	cset, found := ct_headers["charset"]
+	if found && cset != "utf-8" {
+		encReader, err = charset.NewReaderLabel(cset, baseReader)
+		if err != nil {
+			return baseReader
+		}
+		return encReader
+	}
+	return baseReader
+}
+
 // contentReader ...
 func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
+
 	if headers.Get("Content-Transfer-Encoding") == "quoted-printable" {
+		qpReader := quotedprintable.NewReader(bodyReader)
 		headers.Del("Content-Transfer-Encoding")
-		return bufioReader(quotedprintable.NewReader(bodyReader))
+		return bufioReader(create_charset_reader(headers, qpReader))
 	}
 	if headers.Get("Content-Transfer-Encoding") == "base64" {
 		headers.Del("Content-Transfer-Encoding")
-		return bufioReader(base64.NewDecoder(base64.StdEncoding, bodyReader))
+		return bufioReader(create_charset_reader(headers, base64.NewDecoder(base64.StdEncoding, bodyReader)))
 	}
-	return bufioReader(bodyReader)
+	return bufioReader(create_charset_reader(headers, bodyReader))
 }
 
 // decodeRFC2047 ...
