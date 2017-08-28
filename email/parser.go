@@ -224,7 +224,6 @@ func decodeRFC2047(header string) (out string) {
 	var err error
 	dec := new(mime.WordDecoder)
 	dec.CharsetReader = func(cset string, input io.Reader) (io.Reader, error) {
-		fmt.Println("unknown charset: " + cset)
 		encReader, err := charset.NewReaderLabel(cset, input)
 		if err != nil {
 			return input, nil
@@ -233,8 +232,7 @@ func decodeRFC2047(header string) (out string) {
 	}
 	out, err = dec.DecodeHeader(header)
 	if err != nil {
-		fmt.Printf("dec failed 2047 encoded: %s\n", header)
+		return header
 	}
-	fmt.Println(header)
 	return
 }
