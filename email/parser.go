@@ -219,11 +219,22 @@ func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
 }
 
 // decodeRFC2047 ...
-func decodeRFC2047(s string) string {
-	// GO 1.5 does not decode headers, but this may change in future releases...
-	decoded, err := (&mime.WordDecoder{}).DecodeHeader(s)
-	if err != nil || len(decoded) == 0 {
-		return s
+func decodeRFC2047(header string) (out string) {
+
+	var err error
+	dec := new(mime.WordDecoder)
+	dec.CharsetReader = func(cset string, input io.Reader) (io.Reader, error) {
+		fmt.Println("unknown charset: " + cset)
+		encReader, err := charset.NewReaderLabel(cset, input)
+		if err != nil {
+			return input, nil
+		}
+		return encReader, nil
 	}
-	return decoded
+	out, err = dec.DecodeHeader(header)
+	if err != nil {
+		fmt.Printf("dec failed 2047 encoded: %s\n", header)
+	}
+	fmt.Println(header)
+	return
 }
