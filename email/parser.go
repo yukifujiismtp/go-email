@@ -103,14 +103,18 @@ func readParts(bodyReader io.Reader, boundary string) ([]*Message, error) {
 	for {
 
 		part, partErr := multipartReader.NextPart()
-		if partErr == io.EOF {
+
+		// fmt.Println("\n\n----------------------------------------------------------------------------------------")
+		// fmt.Printf("READ PART: %s, %s\n", part, partErr)
+		// fmt.Println("----------------------------------------------------------------------------------------\\n")
+
+		// break on error, parsing broken stuff is bad
+		// but don't want to lose all the parts we have parsed
+		if partErr == io.EOF || partErr != nil {
 			break
 		}
 
-		if partErr != nil {
-			return []*Message{}, partErr
-		}
-
+		// if there's no error give parsing a go
 		newEmailPart, msgErr := parseMessageWithHeader(Header(part.Header), part)
 		part.Close()
 		if msgErr != nil {
