@@ -222,7 +222,7 @@ func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
 	if headers.Get("Content-Transfer-Encoding") == "quoted-printable" {
 		headers.Del("Content-Transfer-Encoding")
 		rdr := bufioReader(create_charset_reader(headers, quotedprintable.NewReader(bytes.NewReader(reader_data))))
-		_, err := rdr.Peek(1)
+		_, err := rdr.Peek(512)
 		if err == nil {
 			return rdr
 		}
