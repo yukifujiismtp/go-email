@@ -103,7 +103,7 @@ func readParts(bodyReader io.Reader, boundary string) ([]*Message, error) {
 	for {
 
 		part, partErr := multipartReader.NextPart()
-		if partErr == io.EOF || (partErr != nil && partErr.Error() == "multipart: NextPart: EOF") {
+		if partErr == io.EOF {
 			break
 		}
 
@@ -114,8 +114,7 @@ func readParts(bodyReader io.Reader, boundary string) ([]*Message, error) {
 		newEmailPart, msgErr := parseMessageWithHeader(Header(part.Header), part)
 		part.Close()
 		if msgErr != nil {
-			continue // instead of failing totally just keep going
-			//return []*Message{}, msgErr
+			continue
 		}
 		parts = append(parts, newEmailPart)
 	}
@@ -216,30 +215,34 @@ func create_charset_reader(headers Header, baseReader io.Reader) io.Reader {
 func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
 
 	// clone the bodyReader data off, bufio.NewReader seems to mutate the underlying io.Reader
-	reader_data, _ := ioutil.ReadAll(bodyReader)
+	encoded_bytes, _ := ioutil.ReadAll(bodyReader)
+	var decoded_bytes []byte
+	var err error
 
 	// if quote-printable - attempt to create a decode reader and test it by peeking
 	if headers.Get("Content-Transfer-Encoding") == "quoted-printable" {
 		headers.Del("Content-Transfer-Encoding")
-		rdr := bufioReader(create_charset_reader(headers, quotedprintable.NewReader(bytes.NewReader(reader_data))))
-		_, err := rdr.Peek(512)
-		if err == nil {
-			return rdr
+		decReader := quotedprintable.NewReader(bytes.NewReader(encoded_bytes))
+		decoded_bytes, err = ioutil.ReadAll(decReader)
+		if err != nil {
+			return bufioReader(create_charset_reader(headers, bytes.NewReader(encoded_bytes)))
 		}
+		return bufioReader(create_charset_reader(headers, bytes.NewReader(decoded_bytes)))
 	}
 
 	// if base64 - attempt to create a decode reader and test it by peeking
 	if headers.Get("Content-Transfer-Encoding") == "base64" {
 		headers.Del("Content-Transfer-Encoding")
-		rdr := bufioReader(create_charset_reader(headers, base64.NewDecoder(base64.StdEncoding, bytes.NewReader(reader_data))))
-		_, err := rdr.Peek(1)
-		if err == nil {
-			return rdr
+		decReader := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(encoded_bytes))
+		decoded_bytes, err = ioutil.ReadAll(decReader)
+		if err != nil {
+			return bufioReader(create_charset_reader(headers, bytes.NewReader(encoded_bytes)))
 		}
+		return bufioReader(create_charset_reader(headers, bytes.NewReader(decoded_bytes)))
 	}
 
 	// just wrap the reader in a charset_decoder
-	return bufioReader(create_charset_reader(headers, bytes.NewReader(reader_data)))
+	return bufioReader(create_charset_reader(headers, bytes.NewReader(encoded_bytes)))
 }
 
 // decodeRFC2047 ...
