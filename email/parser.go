@@ -100,17 +100,26 @@ func readParts(bodyReader io.Reader, boundary string) ([]*Message, error) {
 	parts := make([]*Message, 0, 1)
 	multipartReader := multipart.NewReader(bodyReader, boundary)
 
-	for part, partErr := multipartReader.NextPart(); partErr != io.EOF; part, partErr = multipartReader.NextPart() {
-		if partErr != nil && partErr != io.EOF {
+	for {
+
+		part, partErr := multipartReader.NextPart()
+		if partErr == io.EOF || (partErr != nil && partErr.Error() == "multipart: NextPart: EOF") {
+			break
+		}
+
+		if partErr != nil {
 			return []*Message{}, partErr
 		}
+
 		newEmailPart, msgErr := parseMessageWithHeader(Header(part.Header), part)
 		part.Close()
 		if msgErr != nil {
-			return []*Message{}, msgErr
+			continue // instead of failing totally just keep going
+			//return []*Message{}, msgErr
 		}
 		parts = append(parts, newEmailPart)
 	}
+
 	return parts, nil
 }
 
@@ -206,16 +215,31 @@ func create_charset_reader(headers Header, baseReader io.Reader) io.Reader {
 // contentReader ...
 func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
 
+	// clone the bodyReader data off, bufio.NewReader seems to mutate the underlying io.Reader
+	reader_data, _ := ioutil.ReadAll(bodyReader)
+
+	// if quote-printable - attempt to create a decode reader and test it by peeking
 	if headers.Get("Content-Transfer-Encoding") == "quoted-printable" {
-		qpReader := quotedprintable.NewReader(bodyReader)
 		headers.Del("Content-Transfer-Encoding")
-		return bufioReader(create_charset_reader(headers, qpReader))
+		rdr := bufioReader(create_charset_reader(headers, quotedprintable.NewReader(bytes.NewReader(reader_data))))
+		_, err := rdr.Peek(1)
+		if err == nil {
+			return rdr
+		}
 	}
+
+	// if base64 - attempt to create a decode reader and test it by peeking
 	if headers.Get("Content-Transfer-Encoding") == "base64" {
 		headers.Del("Content-Transfer-Encoding")
-		return bufioReader(create_charset_reader(headers, base64.NewDecoder(base64.StdEncoding, bodyReader)))
+		rdr := bufioReader(create_charset_reader(headers, base64.NewDecoder(base64.StdEncoding, bytes.NewReader(reader_data))))
+		_, err := rdr.Peek(1)
+		if err == nil {
+			return rdr
+		}
 	}
-	return bufioReader(create_charset_reader(headers, bodyReader))
+
+	// just wrap the reader in a charset_decoder
+	return bufioReader(create_charset_reader(headers, bytes.NewReader(reader_data)))
 }
 
 // decodeRFC2047 ...
