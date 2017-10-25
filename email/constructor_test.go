@@ -21,7 +21,6 @@ import (
 
 // TestBasicEmailCreation ...
 func TestBasicEmailCreation(t *testing.T) {
-	t.Parallel()
 
 	expectedHeaders := map[string][]string{
 		"Subject": []string{"Test Subject"},
@@ -142,7 +141,6 @@ func testMultipartAlternativeWithStdLib(t *testing.T, originalPart *Message, std
 
 // TestComplexEmailCreation ...
 func TestInlineEmailCreation(t *testing.T) {
-	t.Parallel()
 
 	expectedHeaders := map[string][]string{
 		"Subject": []string{"Test Subject with unicode 非常感谢你"},
