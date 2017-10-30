@@ -1,5 +1,7 @@
 # go-email
 
+Fork of veqryn/go-email with updates to parsing methods.
+
 ### Installation
     $ go get github.com/veqryn/go-email/email
 
