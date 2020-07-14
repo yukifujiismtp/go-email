@@ -235,7 +235,8 @@ func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
 	}
 
 	// if base64 - attempt to create a decode reader and test it by peeking
-	if headers.Get("Content-Transfer-Encoding") == "base64" {
+	// Ignore it if it's part of a Content-Id block then it will return as charset
+	if headers.Get("Content-Transfer-Encoding") == "base64" && headers.Get("Content-Id") == "" {
 		headers.Del("Content-Transfer-Encoding")
 		decReader := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(encoded_bytes))
 		decoded_bytes, err = ioutil.ReadAll(decReader)
