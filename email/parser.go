@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"golang.org/x/net/html/charset"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -17,6 +16,8 @@ import (
 	"mime/quotedprintable"
 	"net/mail"
 	"strings"
+
+	"golang.org/x/net/html/charset"
 )
 
 // ParseMessage parses and returns a Message from an io.Reader
@@ -25,6 +26,16 @@ import (
 // or bytes.NewReader() to create a reader.)
 // Any "quoted-printable" or "base64" encoded bodies will be decoded.
 func ParseMessage(r io.Reader) (*Message, error) {
+	return ParseMessageWithCID(r, false)
+}
+
+// ParseMessageWithCID parses and returns a Message from an io.Reader
+// containing the raw text of an email message.
+// (If the raw email is a string or []byte, use strings.NewReader()
+// or bytes.NewReader() to create a reader.)
+// Any "quoted-printable" or "base64" encoded bodies will be decoded.
+// If keepCID is true then any base64 CID parts will NOT be decoded.
+func ParseMessageWithCID(r io.Reader, keepCID bool) (*Message, error) {
 	msg, err := mail.ReadMessage(&leftTrimReader{r: bufioReader(r)})
 	if err != nil {
 		return nil, err
@@ -35,7 +46,7 @@ func ParseMessage(r io.Reader) (*Message, error) {
 			values[idx] = decodeRFC2047(val)
 		}
 	}
-	return parseMessageWithHeader(Header(msg.Header), msg.Body)
+	return parseMessageWithHeaderWithCID(Header(msg.Header), msg.Body, keepCID)
 }
 
 // parseMessageWithHeader parses and returns a Message from an already filled
@@ -44,8 +55,17 @@ func ParseMessage(r io.Reader) (*Message, error) {
 // or bytes.NewReader() to create a reader.)
 // Any "quoted-printable" or "base64" encoded bodies will be decoded.
 func parseMessageWithHeader(headers Header, bodyReader io.Reader) (*Message, error) {
+	return parseMessageWithHeaderWithCID(headers, bodyReader, false)
+}
 
-	bufferedReader := contentReader(headers, bodyReader)
+// parseMessageWithHeaderWithCID parses and returns a Message from an already filled
+// Header, and an io.Reader containing the raw text of the body/payload.
+// (If the raw body is a string or []byte, use strings.NewReader()
+// or bytes.NewReader() to create a reader.)
+// Any "quoted-printable" or "base64" encoded bodies will be decoded.
+// If keepCID is true then any base64 CID parts will NOT be decoded.
+func parseMessageWithHeaderWithCID(headers Header, bodyReader io.Reader, keepCID bool) (*Message, error) {
+	bufferedReader := contentReader(headers, bodyReader, keepCID)
 
 	var err error
 	var mediaType string
@@ -216,7 +236,7 @@ func create_charset_reader(headers Header, baseReader io.Reader) io.Reader {
 }
 
 // contentReader ...
-func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
+func contentReader(headers Header, bodyReader io.Reader, keepCID bool) *bufio.Reader {
 
 	// clone the bodyReader data off, bufio.NewReader seems to mutate the underlying io.Reader
 	encoded_bytes, _ := ioutil.ReadAll(bodyReader)
@@ -236,7 +256,7 @@ func contentReader(headers Header, bodyReader io.Reader) *bufio.Reader {
 
 	// if base64 - attempt to create a decode reader and test it by peeking
 	// Ignore it if it's part of a Content-Id block then it will return as charset
-	if headers.Get("Content-Transfer-Encoding") == "base64" && headers.Get("Content-Id") == "" {
+	if headers.Get("Content-Transfer-Encoding") == "base64" && headers.Get("Content-Id") == "" && !keepCID {
 		headers.Del("Content-Transfer-Encoding")
 		decReader := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(encoded_bytes))
 		decoded_bytes, err = ioutil.ReadAll(decReader)
