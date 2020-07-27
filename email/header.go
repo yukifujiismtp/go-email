@@ -161,6 +161,21 @@ func (h Header) ContentDisposition() (string, map[string]string, error) {
 	return h.parseMediaType("Content-Disposition")
 }
 
+// ContentID parses and returns the content Id
+// and an empty string if there is no content id header field.
+func (h Header) ContentID() string {
+	cid := h.Get("Content-Id")
+	cid = strings.TrimPrefix(cid, "<")
+	cid = strings.TrimSuffix(cid, ">")
+	return cid
+}
+
+// ContentEncoding parses and returns the content transfer encoding
+// and an empty string if there is no content transfer encoding header field.
+func (h Header) ContentEncoding() string {
+	return h.Get("Content-Transfer-Encoding")
+}
+
 // parseMediaType ...
 func (h Header) parseMediaType(typeField string) (string, map[string]string, error) {
 	if content := h.Get(typeField); len(content) > 0 {
