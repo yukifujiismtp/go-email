@@ -59,6 +59,10 @@ type Message struct {
 	// quoted-printable or base64, and will be re-encoded when written out
 	// based on the Content-Type.
 	Body []byte
+	
+	// Salvaged is a custom flag for the archiving system to alert the process
+	// that the body and headers have been fudged
+	Salvaged bool
 }
 
 // Payload will return the payload of the message, which can only be one the
