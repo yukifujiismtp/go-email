@@ -40,6 +40,7 @@ func ParseMessageWithCID(r io.Reader, keepCID bool) (*Message, error) {
 	if err != nil {
 		return nil, err
 	}
+	
 	// decode any Q-encoded values
 	for _, values := range msg.Header {
 		for idx, val := range values {
@@ -255,8 +256,13 @@ func contentReader(headers Header, bodyReader io.Reader, keepCID bool) *bufio.Re
 	}
 
 	// if base64 - attempt to create a decode reader and test it by peeking
-	// Ignore it if it's part of a Content-Id block then it will return as charset
-	if headers.Get("Content-Transfer-Encoding") == "base64" && headers.Get("Content-Id") == "" && !keepCID {
+	// Email main content shouldn't be decoded.
+	// https://app.asana.com/0/180260827951492/1182014187881601/f
+	// https://app.asana.com/0/180260827951492/1203347566199487/f
+	if headers.Get("Content-Transfer-Encoding") == "base64" &&
+		!strings.Contains(headers.Get("Content-Type"), "text/plain") &&
+		!strings.Contains(headers.Get("Content-Type"), "text/html") &&
+		!keepCID {
 		headers.Del("Content-Transfer-Encoding")
 		decReader := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(encoded_bytes))
 		decoded_bytes, err = ioutil.ReadAll(decReader)
